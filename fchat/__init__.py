@@ -2,4 +2,4 @@
 
 __version__ = "0.0.1"
 
-from fchat.fchat import *
+from .fchat import *

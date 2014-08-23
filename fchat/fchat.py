@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+__all__ = ['UserDoesNotExist', 'User', 'Channel', 'FChatClient']
+
 from ws4py.client.threadedclient import WebSocketClient
 import urllib
 import urllib.request

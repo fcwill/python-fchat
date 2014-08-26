@@ -35,7 +35,8 @@ class Channel(object):
         self.users = []
 
     def add_user(self, user):
-        self.users.append(user)
+        if user not in self.users:
+            self.users.append(user)
 
     def remove_user(self, user):
         if user in self.users:

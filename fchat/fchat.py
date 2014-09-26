@@ -287,7 +287,7 @@ class FChatClient(WebSocketClient):
             if user_name == "":
                 continue
 
-            opers.append(self.users[user_name])
+            opers.append(user_name)
 
         channel.set_opers(opers)
 
@@ -327,6 +327,9 @@ class FChatClient(WebSocketClient):
 
         self.on_message(user, msg, channel)
 
+    def on_ERR(self, data):
+        self.on_error(data['number'], data['message'])
+
     # Combined message handler
     def on_message(self, user, msg, channel=None):
         pass
@@ -350,6 +353,9 @@ class FChatClient(WebSocketClient):
         pass
 
     def on_channel_opers(self, channel, opers):
+        pass
+
+    def on_error(self, number, message):
         pass
 
     # - FChat Commands

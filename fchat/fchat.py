@@ -291,7 +291,7 @@ class FChatClient(WebSocketClient):
 
         channel.set_opers(opers)
 
-        self.on_channel_opers(self, channel, opers)
+        self.on_channel_opers(channel, opers)
 
     # Change channel description
     def on_CDS(self, data):

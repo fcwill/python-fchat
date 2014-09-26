@@ -171,11 +171,22 @@ class FChatClient(WebSocketClient):
 
     # Identification successful
     def on_IDN(self, data):
-        pass
+        self.on_identified(data['character'])
 
     # Channel invite
     def on_CIU(self, data):
-        pass
+        sender = self.get_user_by_character(data['sender'])
+
+        if sender is None:
+            return
+
+        channel_name = ""
+        if "name" in data:
+            channel_name = data['name']
+        elif "channel" in data:
+            channel_name = data['channel']
+
+        self.on_invite(sender, channel_name)
 
     # Server variables
     def on_VAR(self, data):
@@ -236,10 +247,14 @@ class FChatClient(WebSocketClient):
 
     # User joined channel
     def on_JCH(self, data):
-        if data['channel'] not in self.channels:
-            self.channels[data['channel']] = Channel(data['channel'], data['title'])
+        channel_name = data['channel']
+        if channel_name not in self.channels:
+            self.channels[channel_name] = Channel(channel_name, data['title'])
 
-        self.channels[data['channel']].add_user(self.users[data['character']['identity']])
+        user = self.users[data['character']['identity']]
+        self.channels[channel_name].add_user(user)
+
+        self.on_join(self.channels[channel_name], user)
 
     # Initial channel data
     def on_ICH(self, data):
@@ -248,10 +263,14 @@ class FChatClient(WebSocketClient):
 
     # User leaves channel
     def on_LCH(self, data):
-        self.channels[data['channel']].remove_user(self.users[data['character']])
+        channel_name = data['channel']
+        user = self.users[data['character']]
+        self.channels[channel_name].remove_user(user)
 
-        if data['character'] == self.character:
-            del self.channels[data['channel']]
+        self.on_leave(self.channels[channel_name], user)
+
+        if user == self.own_user:
+            del self.channels[channel_name]
 
     # Change channel description
     def on_CDS(self, data):
@@ -287,6 +306,18 @@ class FChatClient(WebSocketClient):
 
     # Combined message handler
     def on_message(self, user, msg, channel=None):
+        pass
+
+    def on_identified(self, character):
+        pass
+
+    def on_invite(self, sender, channel_name):
+        pass
+
+    def on_join(self, channel, user):
+        pass
+
+    def on_leave(self, channel, user):
         pass
 
     # - FChat Commands

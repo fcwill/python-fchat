@@ -284,6 +284,9 @@ class FChatClient(WebSocketClient):
         opers = []
 
         for user_name in data['oplist']:
+            if user_name == "":
+                continue
+
             opers.append(self.users[user_name])
 
         channel.set_opers(opers)

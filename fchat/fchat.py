@@ -261,6 +261,8 @@ class FChatClient(WebSocketClient):
         for user in data['users']:
             self.channels[data['channel']].add_user(self.users[user['identity']])
 
+        self.on_channel_data(self.channels[data['channel']])
+
     # User leaves channel
     def on_LCH(self, data):
         channel_name = data['channel']
@@ -318,6 +320,9 @@ class FChatClient(WebSocketClient):
         pass
 
     def on_leave(self, channel, user):
+        pass
+
+    def on_channel_data(self, channel):
         pass
 
     # - FChat Commands

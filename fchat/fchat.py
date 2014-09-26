@@ -276,7 +276,9 @@ class FChatClient(WebSocketClient):
 
     # Change channel description
     def on_CDS(self, data):
-        self.channels[data['channel']].set_description(data['description'])
+        channel = self.channels[data['channel']]
+        channel.set_description(data['description'])
+        self.on_channel_description(channel, data['description'])
 
     # Private message
     def on_PRI(self, data):
@@ -323,6 +325,9 @@ class FChatClient(WebSocketClient):
         pass
 
     def on_channel_data(self, channel):
+        pass
+
+    def on_channel_description(self, channel, description):
         pass
 
     # - FChat Commands

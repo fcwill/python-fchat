@@ -33,6 +33,7 @@ class Channel(object):
         self.title = title
         self.description = ""
         self.users = []
+        self.opers = []
 
     def add_user(self, user):
         if user not in self.users:
@@ -44,6 +45,9 @@ class Channel(object):
 
     def set_description(self, desc):
         self.description = desc
+
+    def set_opers(self, opers):
+        self.opers = opers
 
 
 class OutgoingPumpThread(threading.Thread):
@@ -274,6 +278,18 @@ class FChatClient(WebSocketClient):
         if user == self.own_user:
             del self.channels[channel_name]
 
+    # Channel Operator List
+    def on_COL(self, data):
+        channel = self.channels[data['channel']]
+        opers = []
+
+        for user_name in data['oplist']:
+            opers.append(self.users[user_name])
+
+        channel.set_opers(opers)
+
+        self.on_channel_opers(self, channel, opers)
+
     # Change channel description
     def on_CDS(self, data):
         channel = self.channels[data['channel']]
@@ -328,6 +344,9 @@ class FChatClient(WebSocketClient):
         pass
 
     def on_channel_description(self, channel, description):
+        pass
+
+    def on_channel_opers(self, channel, opers):
         pass
 
     # - FChat Commands

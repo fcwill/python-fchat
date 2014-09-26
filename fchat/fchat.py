@@ -190,7 +190,11 @@ class FChatClient(WebSocketClient):
         elif "channel" in data:
             channel_name = data['channel']
 
-        self.on_invite(sender, channel_name)
+        title = ''
+        if "title" in data:
+            title = data['title']
+
+        self.on_invite(sender, channel_name, title)
 
     # Server variables
     def on_VAR(self, data):
@@ -337,7 +341,7 @@ class FChatClient(WebSocketClient):
     def on_identified(self, character):
         pass
 
-    def on_invite(self, sender, channel_name):
+    def on_invite(self, sender, channel_name, title):
         pass
 
     def on_join(self, channel, user):

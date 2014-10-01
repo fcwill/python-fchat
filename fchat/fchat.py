@@ -11,6 +11,7 @@ import time
 import logging
 import threading
 
+
 class UserDoesNotExist(Exception):
     pass
 
@@ -33,7 +34,8 @@ class Channel(object):
         self.title = title
         self.description = ""
         self.users = []
-        self.opers = []
+        self.operator_names = []
+        self.founder_name = ""
 
     def add_user(self, user):
         if user not in self.users:
@@ -46,8 +48,11 @@ class Channel(object):
     def set_description(self, desc):
         self.description = desc
 
-    def set_opers(self, opers):
-        self.opers = opers
+    def set_operator_names(self, op_names):
+        self.op_names = op_names
+
+    def set_founder_name(self, founder_name):
+        self.founder_name = founder_name
 
 
 class OutgoingPumpThread(threading.Thread):
@@ -69,8 +74,9 @@ class OutgoingPumpThread(threading.Thread):
     def set_delay(self, delay):
         self.delay = delay
 
+
 class FChatClient(WebSocketClient):
-    def __init__(self, url, account, password, character):
+    def __init__(self, url, account, password, character, client_name="Python FChat Library"):
         WebSocketClient.__init__(self, url)
         self.account = account
         self.password = password
@@ -79,6 +85,7 @@ class FChatClient(WebSocketClient):
         self.operators = []
         self.friends = []
         self.ignored_users = []
+        self.client_name = client_name
         self.own_user = None
         self.users = {}
         self.channels = {}
@@ -89,7 +96,7 @@ class FChatClient(WebSocketClient):
 
         self.ticket = self.get_ticket()
 
-        if self.ticket == None:
+        if self.ticket is None:
             return
 
         self.outgoing_thread.start()
@@ -134,7 +141,7 @@ class FChatClient(WebSocketClient):
         if hasattr(self, command_handler):
             try:
                 getattr(self, command_handler)(data)
-            except Exception as e:
+            except Exception:
                 logging.exception("Error running handler for " + command + "!")
         else:
             logging.warning("Unhandled event: " + command)
@@ -151,16 +158,51 @@ class FChatClient(WebSocketClient):
         self.send(cmd + " " + data)
         self.buffer_lock.release()
 
-    def get_user_by_character(self, character):
-        if character in self.users:
-            return self.users[character]
-        else:
+    def add_user(self, user):
+        self.users[user.name.lower()] = user
+
+    def remove_user(self, user):
+        for channel in self.channels:
+            channel.remove_user(user)
+
+        del self.users[user.name.lower()]
+
+    def remove_user_by_name(self, user_name):
+        user = self.get_user_by_name(user_name)
+
+        if user:
+            self.remove_user(user)
+
+    def user_exists_by_name(self, user_name):
+        return user_name.lower() in self.users
+
+    def get_user_by_name(self, name):
+        name = name.lower()
+
+        try:
+            return self.users[name]
+        except KeyError:
             return None
 
-    def get_channel(self, channel):
-        if channel in self.channels:
-            return self.channels[channel]
-        else:
+    def add_channel(self, channel):
+        self.channels[channel.name.lower()] = channel
+
+    def remove_channel(self, channel):
+        del self.channels[channel.name.lower()]
+
+    def remove_channel_by_name(self, channel_name):
+        channel = self.get_channel_by_name(channel_name)
+        if channel:
+            self.remove_channel(channel)
+
+    def channel_exists_by_name(self, channel_name):
+        return channel_name.lower() in self.channels
+
+    def get_channel_by_name(self, channel_name):
+        channel_name = channel_name.lower()
+        try:
+            return self.channels[channel_name]
+        except KeyError:
             return None
 
     def close(self):
@@ -179,7 +221,7 @@ class FChatClient(WebSocketClient):
 
     # Channel invite
     def on_CIU(self, data):
-        sender = self.get_user_by_character(data['sender'])
+        sender = self.get_user_by_name(data['sender'])
 
         if sender is None:
             return
@@ -222,10 +264,10 @@ class FChatClient(WebSocketClient):
     # Global user list
     def on_LIS(self, data):
         for user in data['characters']:
-            self.users[user[0]] = User(user[0], user[1], user[2], user[3])
+            self.add_user(User(user[0], user[1], user[2], user[3]))
 
             if user[0] == self.character:
-                self.own_user = self.users[user[0]]
+                self.own_user = self.get_user_by_name(user[0])
 
     # Server hello command
     def on_HLO(self, data):
@@ -237,76 +279,77 @@ class FChatClient(WebSocketClient):
 
     # New user connected
     def on_NLN(self, data):
-        if data['identity'] not in self.users:
-            self.users[data['identity']] = User(data['identity'], data['gender'], data['status'], '')
+        if not self.user_exists_by_name(data['identity']):
+            self.add_user(User(data['identity'], data['gender'], data['status'], ''))
 
     # User disconnected
     def on_FLN(self, data):
-        if data['character'] in self.users:
-            for channel in self.channels.values():
-                channel.remove_user(self.users[data['character']])
-
-            del self.users[data['character']]
+        self.remove_user_by_name(data['character'])
 
     # User status change
     def on_STA(self, data):
-        if data['character'] in self.users:
-            self.users[data['character']].update(data['status'], data['statusmsg'])
+        user = self.get_user_by_name(data['character'])
+        if user:
+            user.update(data['status'], data['statusmsg'])
 
     # User joined channel
     def on_JCH(self, data):
         channel_name = data['channel']
-        if channel_name not in self.channels:
-            self.channels[channel_name] = Channel(channel_name, data['title'])
 
-        user = self.users[data['character']['identity']]
-        self.channels[channel_name].add_user(user)
+        if not self.channel_exists_by_name(channel_name):
+            self.add_channel(Channel(channel_name, data['title']))
 
-        self.on_join(self.channels[channel_name], user)
+        channel = self.get_channel_by_name(channel_name)
+        user = self.get_user_by_name(data['character']['identity'])
+        channel.add_user(user)
+
+        self.on_join(channel, user)
 
     # Initial channel data
     def on_ICH(self, data):
-        for user in data['users']:
-            self.channels[data['channel']].add_user(self.users[user['identity']])
+        channel = self.get_channel_by_name(data['channel'])
+        for user_data in data['users']:
+            user = self.get_user_by_name(user_data['identity'])
+            channel.add_user(user)
 
-        self.on_channel_data(self.channels[data['channel']])
+        self.on_channel_data(channel)
 
     # User leaves channel
     def on_LCH(self, data):
-        channel_name = data['channel']
-        user = self.users[data['character']]
-        self.channels[channel_name].remove_user(user)
+        channel = self.get_channel_by_name(data['channel'])
+        user = self.get_user_by_name(data['character'])
+        channel.remove_user(user)
 
-        self.on_leave(self.channels[channel_name], user)
+        self.on_leave(channel, user)
 
         if user == self.own_user:
-            del self.channels[channel_name]
+            self.remove_channel(channel)
 
     # Channel Operator List
     def on_COL(self, data):
-        channel = self.channels[data['channel']]
+        channel = self.get_channel_by_name(data['channel'])
         opers = []
 
-        for user_name in data['oplist']:
-            if user_name == "":
-                continue
+        founder = data['oplist'].pop(0)
 
+        for user_name in data['oplist']:
             opers.append(user_name)
 
-        channel.set_opers(opers)
+        channel.set_founder_name(founder)
+        channel.set_operator_names(opers)
 
-        self.on_channel_opers(channel, opers)
+        self.on_channel_operator_list(channel, founder, opers)
 
     # Change channel description
     def on_CDS(self, data):
-        channel = self.channels[data['channel']]
+        channel = self.get_channel_by_name(data['channel'])
         channel.set_description(data['description'])
         self.on_channel_description(channel, data['description'])
 
     # Private message
     def on_PRI(self, data):
         msg = data['message']
-        user = self.get_user_by_character(data['character'])
+        user = self.get_user_by_name(data['character'])
 
         if user is None:
             logging.error("Received message from user who is not on my user list (Name: '%s')" % (data['character']))
@@ -317,13 +360,13 @@ class FChatClient(WebSocketClient):
     # Channel message
     def on_MSG(self, data):
         msg = data['message']
-        user = self.get_user_by_character(data['character'])
+        user = self.get_user_by_name(data['character'])
 
         if user is None:
             logging.error("Received message from user who is not on my user list (Name: '%s')" % (data['character']))
             return
 
-        channel = self.get_channel(data['channel'])
+        channel = self.get_channel_by_name(data['channel'])
 
         if channel is None:
             logging.error("Received message in channel I'm not even in (Channel: '%s')!" % (data['channel']))
@@ -356,7 +399,7 @@ class FChatClient(WebSocketClient):
     def on_channel_description(self, channel, description):
         pass
 
-    def on_channel_opers(self, channel, opers):
+    def on_channel_operator_list(self, channel, founder_name, operator_names):
         pass
 
     def on_error(self, number, message):
@@ -364,8 +407,12 @@ class FChatClient(WebSocketClient):
 
     # - FChat Commands
     def IDN(self, character):
-        data = {'account': self.account, 'character': character, 'ticket': self.ticket,
-                        'cname': 'Python FChat Library', 'cversion': '0.0.2', 'method': 'ticket'}
+        data = {'account': self.account,
+                'character': character,
+                'ticket': self.ticket,
+                'cname': self.client_name,
+                'cversion': '0.0.2',
+                'method': 'ticket'}
         self.send_message("IDN", data)
 
     def JCH(self, channel):
@@ -391,6 +438,7 @@ class FChatClient(WebSocketClient):
 
 
 if __name__ == "__main__":
+    import sys
     logging.basicConfig(format='%(asctime)s %(message)s', level=logging.DEBUG)
     logging.info("Starting up FChatClient!")
     try:

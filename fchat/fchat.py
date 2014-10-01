@@ -415,7 +415,7 @@ class FChatClient(WebSocketClient):
     def on_error(self, number, message):
         pass
 
-    def on_status_changed(self, user):
+    def on_user_status_changed(self, user):
         pass
 
     # - FChat Commands

@@ -308,7 +308,7 @@ class FChatClient(WebSocketClient):
         user = self.get_user_by_name(data['character'])
         if user:
             user.update(data['status'], data['statusmsg'])
-            self.on_status_changed(user)
+            self.on_user_status_changed(user)
 
     # User joined channel
     def on_JCH(self, data):

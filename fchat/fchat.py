@@ -403,6 +403,13 @@ class FChatClient(WebSocketClient):
     def on_ERR(self, data):
         self.on_error(data['number'], data['message'])
 
+    # User is typing
+    def on_TPN(self, data):
+        user = self.get_user_by_name(data['character'])
+        status = data['status']
+
+        self.on_user_typing(user, status)
+
     # Combined message handler
     def on_message(self, user, msg, channel=None):
         pass
@@ -438,6 +445,9 @@ class FChatClient(WebSocketClient):
         pass
 
     def on_user_disconnected(self, user):
+        pass
+
+    def on_user_typing(self, user, status):
         pass
 
     # - FChat Commands

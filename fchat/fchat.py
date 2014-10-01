@@ -49,7 +49,10 @@ class Channel(object):
         return user in self.users
 
     def user_is_operator(self, user):
-        return user.name in self.operator_names
+        for name in self.operator_names:
+            if user.name.lower() == name.lower():
+                return True
+        return False
 
     def user_is_founder(self, user):
         return user.name.lower() == self.founder_name.lower()
@@ -299,9 +302,14 @@ class FChatClient(WebSocketClient):
         if not self.user_exists_by_name(data['identity']):
             self.add_user(User(data['identity'], data['gender'], data['status'], ''))
 
+        user = self.get_user_by_name(data['identity'])
+        self.on_user_connected(user)
+
     # User disconnected
     def on_FLN(self, data):
-        self.remove_user_by_name(data['character'])
+        user = self.get_user_by_name(data['character'])
+        self.on_user_disconnected(user)
+        self.remove_user(user)
 
     # User status change
     def on_STA(self, data):
@@ -424,6 +432,12 @@ class FChatClient(WebSocketClient):
         pass
 
     def on_user_status_changed(self, user):
+        pass
+
+    def on_user_connected(self, user):
+        pass
+
+    def on_user_disconnected(self, user):
         pass
 
     # - FChat Commands

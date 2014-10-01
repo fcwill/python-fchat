@@ -45,6 +45,15 @@ class Channel(object):
         if user in self.users:
             self.users.remove(user)
 
+    def user_exists(self, user):
+        return user in self.users
+
+    def user_is_operator(self, user):
+        return user.name in self.operator_names
+
+    def user_is_founder(self, user):
+        return user.name.lower() == self.founder_name.lower()
+
     def set_description(self, desc):
         self.description = desc
 

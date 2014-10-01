@@ -171,7 +171,7 @@ class FChatClient(WebSocketClient):
         self.users[user.name.lower()] = user
 
     def remove_user(self, user):
-        for channel in self.channels:
+        for _, channel in self.channels.items():
             channel.remove_user(user)
 
         del self.users[user.name.lower()]
@@ -184,6 +184,14 @@ class FChatClient(WebSocketClient):
 
     def user_exists_by_name(self, user_name):
         return user_name.lower() in self.users
+
+    def user_common_channels(self, user):
+        channels = []
+        for _, channel in self.channels.items():
+            if channel.user_exists(user):
+                channels.append(channel)
+
+        return channels
 
     def get_user_by_name(self, name):
         name = name.lower()

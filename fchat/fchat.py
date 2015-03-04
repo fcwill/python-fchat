@@ -1,15 +1,42 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-__all__ = ['UserDoesNotExist', 'User', 'Channel', 'FChatClient']
+__all__ = ['UserDoesNotExist', 'User', 'Channel', 'FChatClient', 'auto_reconnect']
 
 from ws4py.client.threadedclient import WebSocketClient
+from ws4py.exc import WebSocketException
 import urllib
 import urllib.request
 import json
 import time
 import logging
 import threading
+
+
+def auto_reconnect(func):
+    def inner(self):
+        while True:
+            self.logger.info("Connecting ...")
+            try:
+                self.setup()
+                self.connect()
+                func(self)
+            except KeyboardInterrupt:
+                self.close()
+                return
+            except WebSocketException as e:
+                self.logger.exception("WebSocketException")
+            except ConnectionError as e:
+                self.logger.error("Could not connect to server!")
+            finally:
+                self.terminate_outgoing_thread()
+                self.logger.info("Trying to reconnect in %d seconds (%d attempt) ..." % (self.reconnect_delay, self.reconnect_attempt))
+                time.sleep(self.reconnect_delay)
+                self.reconnect_delay *= 2
+                self.reconnect_attempt += 1
+                WebSocketClient.__init__(self, self.url)
+
+    return inner
 
 
 class UserDoesNotExist(Exception):
@@ -88,33 +115,41 @@ class OutgoingPumpThread(threading.Thread):
 
 
 class FChatClient(WebSocketClient):
+    logger = logging.getLogger("fchat")
+
     def __init__(self, url, account, password, character, client_name="Python FChat Library"):
         WebSocketClient.__init__(self, url)
         self.account = account
         self.password = password
         self.character = character
+        self.client_name = client_name
+        self.reconnect_delay = 1
+        self.reconnect_attempt = 0
+
+    def setup(self):
         self.server_vars = {}
         self.operators = []
         self.friends = []
         self.ignored_users = []
-        self.client_name = client_name
-        self.own_user = None
         self.users = {}
         self.channels = {}
-
+        self.own_user = None
         self.outgoing_buffer = []
-        self.buffer_lock = threading.Lock()
-        self.outgoing_thread = OutgoingPumpThread(self)
 
         self.ticket = self.get_ticket()
 
         if self.ticket is None:
-            return
+            return False
+
+        self.buffer_lock = threading.Lock()
+        self.outgoing_thread = OutgoingPumpThread(self)
 
         self.outgoing_thread.start()
 
+        return True
+
     def get_ticket(self):
-        logging.info("Fetching ticket ...")
+        self.logger.info("Fetching ticket ...")
 
         data = {'account': self.account, 'password': self.password}
         data_enc = urllib.parse.urlencode(data)
@@ -127,14 +162,23 @@ class FChatClient(WebSocketClient):
         if 'ticket' in text_parsed:
             return text_parsed['ticket']
         else:
-            logging.error(text_parsed['error'])
+            self.logger.error(text_parsed['error'])
             return None
 
+    def terminate_outgoing_thread(self):
+        if self.outgoing_thread.running:
+            self.outgoing_thread.running = False
+            self.outgoing_thread.join()
+
     def opened(self):
+        self.reconnect_delay = 1
+        self.reconnect_attempt = 0
+        self.logger.info("Connected!")
         self.IDN(self.character)
 
     def closed(self, code, reason=None):
-        logging.info("Closing (" + str(code) + ", " + str(reason) + ")!")
+        self.logger.info("Closing (" + str(code) + ", " + str(reason) + ")!")
+        self.terminate_outgoing_thread()
 
     def received_message(self, m):
         msg = m.data.decode("UTF-8")
@@ -148,15 +192,15 @@ class FChatClient(WebSocketClient):
             json_string = "{}"
             data = {}
 
-        logging.debug("<< " + command + " " + json_string)
+        self.logger.debug("<< %s %s" % (command.encode('UTF-8'), json_string.encode('UTF-8')))
 
         if hasattr(self, command_handler):
             try:
                 getattr(self, command_handler)(data)
             except Exception:
-                logging.exception("Error running handler for " + command + "!")
+                self.logger.exception("Error running handler for " + command + "!")
         else:
-            logging.warning("Unhandled event: " + command)
+            self.logger.warning("Unhandled event: " + command)
 
     def send_message(self, cmd, data):
         self.buffer_lock.acquire()
@@ -166,7 +210,7 @@ class FChatClient(WebSocketClient):
     def send_one(self):
         self.buffer_lock.acquire()
         cmd, data = self.outgoing_buffer.pop(0)
-        logging.debug(">> " + cmd + " " + data)
+        self.logger.debug(">> %s %s" % (cmd, data))
         self.send(cmd + " " + data)
         self.buffer_lock.release()
 
@@ -225,11 +269,6 @@ class FChatClient(WebSocketClient):
         except KeyError:
             return None
 
-    def close(self):
-        self.outgoing_thread.running = False
-        self.outgoing_thread.join()
-        super().close()
-
     # - Event Handlers
     # Ping
     def on_PIN(self, data):
@@ -265,7 +304,7 @@ class FChatClient(WebSocketClient):
         # fine tune outgoing message pump
         if data['variable'] == 'msg_flood':
             delay = float(data['value']) * 1.2
-            logging.debug("Fine tuned outgoing message delay to %f." % (delay))
+            self.logger.debug("Fine tuned outgoing message delay to %f." % (delay))
             # Increase the value by 20%, just to make sure
             self.outgoing_thread.set_delay(delay)
 
@@ -291,11 +330,11 @@ class FChatClient(WebSocketClient):
 
     # Server hello command
     def on_HLO(self, data):
-        logging.debug("Server message: '%s'" % (data['message']))
+        self.logger.debug("Server message: '%s'" % (data['message']))
 
     # Number of connected users
     def on_CON(self, data):
-        logging.debug("Connected users: %s" % (data['count']))
+        self.logger.debug("Connected users: %s" % (data['count']))
 
     # New user connected
     def on_NLN(self, data):
@@ -378,7 +417,7 @@ class FChatClient(WebSocketClient):
         user = self.get_user_by_name(data['character'])
 
         if user is None:
-            logging.error("Received message from user who is not on my user list (Name: '%s')" % (data['character']))
+            self.logger.error("Received message from user who is not on my user list (Name: '%s')" % (data['character']))
             return
 
         self.on_message(user, msg)
@@ -389,13 +428,13 @@ class FChatClient(WebSocketClient):
         user = self.get_user_by_name(data['character'])
 
         if user is None:
-            logging.error("Received message from user who is not on my user list (Name: '%s')" % (data['character']))
+            self.logger.error("Received message from user who is not on my user list (Name: '%s')" % (data['character']))
             return
 
         channel = self.get_channel_by_name(data['channel'])
 
         if channel is None:
-            logging.error("Received message in channel I'm not even in (Channel: '%s')!" % (data['channel']))
+            self.logger.error("Received message in channel I'm not even in (Channel: '%s')!" % (data['channel']))
             return
 
         self.on_message(user, msg, channel)
@@ -488,6 +527,7 @@ if __name__ == "__main__":
     logging.info("Starting up FChatClient!")
     try:
         ws = FChatClient('ws://chat.f-list.net:8722', sys.argv[1], sys.argv[2], sys.argv[3])
+        ws.setup()
         ws.connect()
         ws.run_forever()
     except KeyboardInterrupt:

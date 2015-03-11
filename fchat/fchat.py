@@ -28,11 +28,16 @@ def auto_reconnect(func):
                 self.logger.exception("WebSocketException")
             except ConnectionError as e:
                 self.logger.error("Could not connect to server!")
+            except Exception:
+                self.logger.exception("Exception")
             finally:
                 self.terminate_outgoing_thread()
                 self.logger.info("Trying to reconnect in %d seconds (%d attempt) ..." % (self.reconnect_delay, self.reconnect_attempt))
                 time.sleep(self.reconnect_delay)
-                self.reconnect_delay *= 2
+
+                if self.reconnect_delay < 120:
+                    self.reconnect_delay *= 2
+
                 self.reconnect_attempt += 1
                 WebSocketClient.__init__(self, self.url)
 
@@ -125,6 +130,7 @@ class FChatClient(WebSocketClient):
         self.client_name = client_name
         self.reconnect_delay = 1
         self.reconnect_attempt = 0
+        self.last_ping_time = time.time()
 
     def setup(self):
         self.server_vars = {}
@@ -179,6 +185,8 @@ class FChatClient(WebSocketClient):
     def closed(self, code, reason=None):
         self.logger.info("Closing (" + str(code) + ", " + str(reason) + ")!")
         self.terminate_outgoing_thread()
+
+        super().closed(code, reason)
 
     def received_message(self, m):
         msg = m.data.decode("UTF-8")
@@ -272,6 +280,7 @@ class FChatClient(WebSocketClient):
     # - Event Handlers
     # Ping
     def on_PIN(self, data):
+        self.last_ping_time = time.time()
         self.send_message("PIN", {})
 
     # Identification successful

@@ -130,7 +130,6 @@ class FChatClient(WebSocketClient):
         self.client_name = client_name
         self.reconnect_delay = 1
         self.reconnect_attempt = 0
-        self.last_ping_time = time.time()
 
     def setup(self):
         self.server_vars = {}
@@ -141,6 +140,7 @@ class FChatClient(WebSocketClient):
         self.channels = {}
         self.own_user = None
         self.outgoing_buffer = []
+        self.last_ping_time = time.time()
 
         self.ticket = self.get_ticket()
 

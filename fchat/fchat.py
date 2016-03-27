@@ -315,9 +315,9 @@ class FChatClient(WebSocketClient):
 
         # fine tune outgoing message pump
         if data['variable'] == 'msg_flood':
-            delay = float(data['value']) * 1.8
+            delay = float(data['value']) * 2
             self.logger.debug("Fine tuned outgoing message delay to %f." % (delay))
-            # Increase the value by 80%, just to make sure
+            # Increase the value by 100%, just to make sure
             self.outgoing_thread.set_delay(delay)
 
     # List of chanops

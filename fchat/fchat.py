@@ -108,11 +108,14 @@ class OutgoingPumpThread(threading.Thread):
         self.client = client
         self.delay = 1
         self.running = True
+        self.last_msg_time = 0
 
     def run(self):
         while self.running:
-            if len(self.client.outgoing_buffer):
+            if len(self.client.outgoing_buffer) and time.time() - self.last_msg_time >= self.delay:
                 self.client.send_one()
+                self.last_msg_time = time.time()
+
             time.sleep(self.delay)
 
     def set_delay(self, delay):

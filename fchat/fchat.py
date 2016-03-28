@@ -203,7 +203,12 @@ class FChatClient(WebSocketClient):
             json_string = "{}"
             data = {}
 
-        self.logger.debug("<< %s %s" % (command.encode('UTF-8'), json_string.encode('UTF-8')))
+        if command == u"ERR":
+            self.logger.error("<< %s %s" % (command.encode('UTF-8'), json_string.encode('UTF-8')))
+        elif command == u"MSG":
+            self.logger.info("<< %s %s" % (command.encode('UTF-8'), json_string.encode('UTF-8')))
+        else:
+            self.logger.debug("<< %s %s" % (command.encode('UTF-8'), json_string.encode('UTF-8')))
 
         if hasattr(self, command_handler):
             try:

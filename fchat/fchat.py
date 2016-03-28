@@ -359,6 +359,11 @@ class FChatClient(WebSocketClient):
     # User disconnected
     def on_FLN(self, data):
         user = self.get_user_by_name(data['character'])
+
+        if not user:
+            logging.warn("Error, got FLN for user not in our list: %s" % (data['character']))
+            return
+
         self.on_user_disconnected(user)
         self.remove_user(user)
 

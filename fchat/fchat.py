@@ -164,7 +164,7 @@ class FChatClient(WebSocketClient):
         data_enc = urllib.parse.urlencode(data)
         data_enc = data_enc.encode("UTF-8")
 
-        response = urllib.request.urlopen('http://www.f-list.net/json/getApiTicket.php', data_enc)
+        response = urllib.request.urlopen('https://www.f-list.net/json/getApiTicket.php', data_enc)
         text = response.read()
         text_parsed = json.loads(text.decode("UTF-8"))
 
